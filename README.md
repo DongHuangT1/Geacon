@@ -6,7 +6,7 @@
 
 1. 修改`core/profile.go`中的配置信息
 2. 设置平台和架构`set "CGO_ENABLED=0" && set "GOOS=linux" && set "GOARCH=amd64"`
-3. 编译生成`go build -ldflags="-s -w" main.go`
+3. 编译生成`go build -trimpath -ldflags="-s -w" main.go`
 
 ## Screenshot
 
